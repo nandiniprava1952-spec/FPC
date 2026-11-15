@@ -28699,6 +28699,267 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
 
 </script>
 <script>if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+<style id="fppc-net-install-style">
+.netpill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid rgba(255,255,255,.35);border-radius:99px;font:600 12px system-ui,Segoe UI,Arial,sans-serif;color:#fff;background:rgba(20,10,0,.6);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);white-space:nowrap;text-shadow:none}
+.netpill i{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.28);flex:none}
+.netpill.off{color:#facc15;border-color:rgba(250,204,21,.65)}
+.netpill.off i{background:#facc15;box-shadow:0 0 0 3px rgba(250,204,21,.28)}
+#cloudLogin .netpill{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;z-index:2}
+#cloudLogin #clInstallWrap{margin-top:14px}
+#cloudLogin #clInstall{width:100%;min-height:46px;padding:10px;border-radius:8px;border:1px solid #ffd9b3;background:rgba(20,10,0,.35);color:#fff;font-weight:700;font-size:15px;font-family:inherit;cursor:pointer;text-shadow:none}
+#cloudLogin #clInstall:active{background:rgba(20,10,0,.6)}
+#cloudLogin #clInstallHint{font-size:12px;color:#ffd9b3;margin-top:8px;min-height:16px;text-align:center}
+#cloudLogin #clInstallWrap[hidden]{display:none}
+</style>
+<script>
+/* Cover / login page: green "Online" ↔ yellow "Offline" pill + "Install app" button (top-level page only) */
+(function(){
+  if(window.top!==window.self) return;
+  var dip=null;
+  var isApp=function(){return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;};
+  var ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  function netUpd(){
+    var on=navigator.onLine!==false;
+    document.querySelectorAll('.netpill').forEach(function(p){
+      p.classList.toggle('off',!on);
+      p.lastElementChild.textContent=on?'Online':'Offline';
+      p.setAttribute('aria-label',on?'Online':'Offline');
+    });
+  }
+  function installUpd(){
+    document.querySelectorAll('#clInstallWrap').forEach(function(w){ w.hidden=isApp(); });
+  }
+  function build(ov){
+    if(!ov||ov.querySelector('.netpill')) return;
+    var pill=document.createElement('span');
+    pill.className='netpill'; pill.setAttribute('role','status'); pill.setAttribute('aria-live','polite');
+    pill.innerHTML='<i></i><span>Online</span>';
+    ov.appendChild(pill);
+
+    var host=ov.querySelector('.cl-card')||ov;
+    var wrap=document.createElement('div'); wrap.id='clInstallWrap';
+    wrap.innerHTML='<button type="button" id="clInstall">\u2B07 Install app</button><div id="clInstallHint" role="status"></div>';
+    host.appendChild(wrap);
+    wrap.querySelector('#clInstall').onclick=function(){
+      var hint=wrap.querySelector('#clInstallHint');
+      if(dip){ dip.prompt(); dip.userChoice.then(function(){dip=null;}); hint.textContent=''; }
+      else hint.textContent=ios?'Tap Share, then Add to Home Screen':'Open the browser menu (\u22EE) and tap Install app or Add to Home screen';
+    };
+    netUpd(); installUpd();
+  }
+
+  window.addEventListener('online',netUpd);
+  window.addEventListener('offline',netUpd);
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') netUpd(); });
+  window.addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); dip=e; installUpd(); });
+  window.addEventListener('appinstalled',function(){ dip=null; document.querySelectorAll('#clInstallWrap').forEach(function(w){w.hidden=true;}); });
+
+  build(document.getElementById('cloudLogin'));
+  /* the login overlay is created by the app's own script; catch it if it appears later (e.g. after logout) */
+  new MutationObserver(function(){ build(document.getElementById('cloudLogin')); }).observe(document.body,{childList:true});
+})();
+</script>
+<style id="sm-upd-style">
+.smu{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;z-index:100000;width:min(calc(100vw - 20px),460px);
+  display:flex;align-items:center;gap:12px;padding:10px 12px;background:#2a1500;color:#fff;border:1px solid #d05200;border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55);font:13px system-ui,Segoe UI,Arial,sans-serif;
+  transform:translate(-50%,-150%);opacity:0;visibility:hidden;pointer-events:none;
+  transition:transform .32s ease,opacity .32s ease,visibility 0s linear .32s}
+.smu.on{transform:translate(-50%,0);opacity:1;visibility:visible;pointer-events:auto;transition-delay:0s}
+.smu-ic{position:relative;width:44px;height:44px;flex:none}
+.smu-ic svg{width:44px;height:44px;display:block}
+.smu-ic circle{fill:none;stroke-width:4}
+.smu-trk{stroke:#4a2a10}
+.smu-bar{stroke:#ff8a3d;stroke-linecap:round;stroke-dasharray:113.1;stroke-dashoffset:113.1;transform:rotate(-90deg);transform-origin:22px 22px;transition:stroke-dashoffset .25s linear}
+.smu-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:-.2px}
+.smu-tx{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.smu-t{font-size:14px;font-weight:700;line-height:1.25}
+.smu-s{color:#ffd9b3;font-size:12px;line-height:1.3}
+.smu-act{display:none;gap:8px;flex:none}
+.smu-act button{font:700 13px system-ui,Segoe UI,Arial,sans-serif;min-height:38px;padding:0 14px;border-radius:9px;cursor:pointer}
+.smu-go{background:#d05200;color:#fff;border:0}
+.smu-later{background:transparent;color:#ffd9b3;border:1px solid #6b3a14}
+.smu-go:active{background:#b34500}
+.smu[data-s=ready] .smu-act{display:flex}
+.smu[data-s=ready] .smu-bar{stroke-dashoffset:0}
+.smu[data-s=inst] .smu-bar{stroke-dashoffset:84.8;transition:none}
+.smu[data-s=inst] svg{animation:smuSpin .9s linear infinite}
+.smu[data-s=inst] .smu-pct{display:none}
+.smu[data-s=done]{border-color:#22c55e}
+.smu[data-s=done] .smu-bar{stroke:#22c55e;stroke-dashoffset:0}
+.smu[data-s=done] .smu-pct{color:#22c55e;font-size:18px}
+@keyframes smuSpin{to{transform:rotate(360deg)}}
+@media (max-width:380px){.smu-act button{padding:0 10px}}
+@media (prefers-reduced-motion:reduce){.smu{transition:opacity .2s}}
+</style>
+<script>
+(function(){
+  if(window.top!==window.self) return;
+  /* ---------- FPC update flow: check -> download (ring) -> Update / Later -> install (spinner) -> restart -> "Updated" ----------
+     Checks when the app opens, when you return to it, when the phone comes back online, and every 30 minutes.
+     The new index.html is downloaded into a staging cache; it only replaces the running copy when the user taps Update. */
+  if('serviceWorker' in navigator && /^https?:/.test(location.protocol) && window.caches){
+    (function(){
+      var CACHE='fppc-v6', STAGE='fppc-stage';
+      var IDX=new URL('index.html',location.href).href, VER=new URL('__ver.json',location.href).href;
+      var SMALL=['manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png'];
+      var EVERY=30*60*1000, MIN_GAP=20000;
+      var st='idle', busy=false, lastChk=0, card=null, hideT=0;
+      var C=113.1; /* ring circumference (r=18) */
+
+      function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+      function jres(o){return new Response(JSON.stringify(o),{headers:{'Content-Type':'application/json'}});}
+      function metaOf(res,size){return {etag:res.headers.get('etag')||'',lm:res.headers.get('last-modified')||'',size:size||0,t:Date.now()};}
+      function norm(e){return String(e||'').replace(/^W\//,'').replace(/"/g,'');}
+      function same(a,b){ /* true = same version (or cannot tell, so do not nag) */
+        if(!a||!b) return true;
+        if(a.etag&&b.etag) return norm(a.etag)===norm(b.etag);
+        if(a.lm&&b.lm) return a.lm===b.lm;
+        return true;
+      }
+      function readMeta(name){
+        return caches.open(name).then(function(c){return c.match(VER);}).then(function(r){return r?r.json():null;}).catch(function(){return null;});
+      }
+      /* the page must be controlled by the new service worker (the old one would answer the download from its cache) */
+      function swReady(){
+        return new Promise(function(res){
+          var c=navigator.serviceWorker.controller; if(!c) return res(false);
+          var ch=new MessageChannel(), t=setTimeout(function(){res(false);},1500);
+          ch.port1.onmessage=function(e){clearTimeout(t);res(!!(e.data&&e.data.v>=2));};
+          try{c.postMessage({type:'PING'},[ch.port2]);}catch(e){clearTimeout(t);res(false);}
+        });
+      }
+
+      /* ---------- card ---------- */
+      function ui(){
+        if(card) return card;
+        card=document.createElement('div');
+        card.className='smu'; card.setAttribute('role','status'); card.setAttribute('aria-live','polite'); card.setAttribute('aria-hidden','true');
+        card.innerHTML=
+          '<div class="smu-ic"><svg viewBox="0 0 44 44" aria-hidden="true"><circle class="smu-trk" cx="22" cy="22" r="18"/><circle class="smu-bar" cx="22" cy="22" r="18"/></svg><b class="smu-pct"></b></div>'+
+          '<div class="smu-tx"><span class="smu-t"></span><span class="smu-s"></span></div>'+
+          '<div class="smu-act"><button type="button" class="smu-go">Update</button><button type="button" class="smu-later">Later</button></div>';
+        card.querySelector('.smu-go').onclick=install;
+        card.querySelector('.smu-later').onclick=function(){hide();};   /* hidden until the next check */
+        document.body.appendChild(card);
+        return card;
+      }
+      function q(s){return ui().querySelector(s);}
+      function prog(p){
+        q('.smu-pct').textContent=p+'%';
+        q('.smu-bar').style.strokeDashoffset=String(C*(1-p/100));
+      }
+      function show(s,p){
+        clearTimeout(hideT);
+        var c=ui(); st=s; c.setAttribute('data-s',s); c.setAttribute('aria-hidden','false');
+        var t=q('.smu-t'), u=q('.smu-s'), pc=q('.smu-pct');
+        if(s==='dl'){ t.textContent='Downloading update\u2026'; u.textContent='You can keep using the app'; pc.textContent=''; q('.smu-bar').style.strokeDashoffset=String(C); prog(p||0); }
+        else if(s==='ready'){ t.textContent='Update available'; u.textContent='Tap Update to restart the app'; pc.textContent='\u2191'; q('.smu-bar').style.strokeDashoffset='0'; }
+        else if(s==='inst'){ t.textContent='Installing update\u2026'; u.textContent='The app will restart on its own'; q('.smu-bar').style.strokeDashoffset=''; }
+        else if(s==='done'){ t.textContent='\u2714 Updated to the latest version'; u.textContent=''; pc.textContent='\u2714'; }
+        void c.offsetWidth; c.classList.add('on');
+      }
+      function hide(){
+        st='idle';
+        if(card){ card.classList.remove('on'); card.setAttribute('aria-hidden','true'); }
+      }
+
+      /* ---------- download into the staging cache ---------- */
+      async function download(){
+        show('dl',0);
+        await caches.delete(STAGE);
+        var res=await fetch('index.html?__chk='+Date.now(),{cache:'reload'});
+        if(!res.ok) throw new Error('http '+res.status);
+        var enc=res.headers.get('content-encoding'), len=+res.headers.get('content-length')||0;
+        var cur=await readMeta(CACHE);
+        var est=enc?((cur&&cur.size)||0):len;       /* decoded size: exact when not compressed, else last version's size */
+        var parts=[], loaded=0, last=-1;
+        if(res.body&&res.body.getReader){
+          var rd=res.body.getReader();
+          for(;;){
+            var x=await rd.read(); if(x.done) break;
+            parts.push(x.value); loaded+=x.value.length;
+            if(est){ var p=Math.min(99,Math.floor(loaded*100/est)); if(p!==last){last=p;prog(p);} }
+          }
+        }else{
+          var ab=await res.arrayBuffer(); parts.push(new Uint8Array(ab)); loaded=ab.byteLength;
+        }
+        if(!enc&&len&&loaded!==len) throw new Error('incomplete');
+        if(cur&&cur.size&&loaded<cur.size*0.5) throw new Error('too small');
+        var blob=new Blob(parts,{type:'text/html'}); parts=null;
+        var meta=metaOf(res,blob.size);
+        var sc=await caches.open(STAGE);
+        await sc.put(IDX,new Response(blob,{headers:{'Content-Type':'text/html; charset=utf-8'}}));
+        await sc.put(VER,jres(meta));                /* written last = marks the staged copy complete */
+        prog(100);
+        await sleep(450);
+        show('ready');
+      }
+
+      /* ---------- check ---------- */
+      async function check(){
+        if(busy||st==='inst') return;
+        busy=true; lastChk=Date.now();
+        try{
+          navigator.serviceWorker.getRegistration().then(function(r){return r&&r.update();}).catch(function(){});
+          if(!(await swReady())) return;
+          var cur=await readMeta(CACHE);
+          var r=await fetch('index.html?__chk='+Date.now(),{method:'HEAD',cache:'no-store'});
+          if(!r.ok) return;
+          var remote=metaOf(r);
+          if(!cur){ await (await caches.open(CACHE)).put(VER,jres(remote)); return; }   /* no baseline yet: assume what we have is current */
+          if(same(cur,remote)){ if(st!=='idle') hide(); caches.delete(STAGE); return; }
+          var sm=await readMeta(STAGE), sc=await caches.open(STAGE);
+          if(sm&&same(sm,remote)&&await sc.match(IDX)){ show('ready'); return; }       /* already downloaded (e.g. they tapped Later) */
+          await download();
+        }catch(e){
+          if(st==='dl') hide();                       /* offline / interrupted: quietly try again at the next check */
+        }finally{ busy=false; }
+      }
+
+      /* ---------- install + restart ---------- */
+      async function install(){
+        if(st!=='ready') return;
+        show('inst'); var t0=Date.now();
+        try{
+          var sc=await caches.open(STAGE), mc=await caches.open(CACHE);
+          var idx=await sc.match(IDX), ver=await sc.match(VER);
+          if(!idx||!ver) throw new Error('staged copy missing');
+          await Promise.all(SMALL.map(function(u){
+            return fetch(u+'?__chk='+Date.now(),{cache:'reload'}).then(function(r){
+              if(r.ok) return mc.put(new URL(u,location.href).href,r);
+            }).catch(function(){});
+          }));
+          await mc.put(IDX,idx);
+          await mc.put(VER,ver);
+          await caches.delete(STAGE);
+          try{localStorage.setItem('sm_upd_done','1');}catch(e){}
+          var w=1300-(Date.now()-t0); if(w>0) await sleep(w);
+          location.reload();
+        }catch(e){
+          hide(); setTimeout(check,500);
+        }
+      }
+
+      /* ---------- triggers ---------- */
+      try{
+        if(localStorage.getItem('sm_upd_done')){          /* we just restarted after an update */
+          localStorage.removeItem('sm_upd_done');
+          show('done'); hideT=setTimeout(hide,4500);
+        }
+      }catch(e){}
+      window.addEventListener('load',function(){setTimeout(check,1500);});                       /* app opened */
+      navigator.serviceWorker.addEventListener('controllerchange',function(){setTimeout(check,800);});
+      document.addEventListener('visibilitychange',function(){                                   /* returned to the app */
+        if(document.visibilityState==='visible'&&Date.now()-lastChk>MIN_GAP) check();
+      });
+      window.addEventListener('online',function(){ if(Date.now()-lastChk>MIN_GAP) check(); });
+      setInterval(check,EVERY);                                                                  /* every 30 minutes */
+    })();
+  }
+})();
+</script>
 <script>
 // Keep bottom-nav highlight in step with the page actually showing (dashboard has no nav button → none lit).
 (function(){
