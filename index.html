@@ -29150,5 +29150,26 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
   syncOk();
 })();
 </script>
+<style id="netfloat-style">
+.netfloat{position:fixed;right:12px;min-width:84px;box-sizing:border-box;justify-content:center;pointer-events:none;padding:4px 9px;font-size:11.5px}
+@media print{.netfloat{display:none !important}}
+.netfloat{top:calc(env(safe-area-inset-top,0px) + 16px);z-index:60}
+.brand-row{padding-right:92px;box-sizing:border-box}
+@media (max-width:700px){.brand-row{padding-right:0}.brand-row > button.cc-out{right:92px !important}.brand-eyebrow{padding-right:176px !important}}
+</style>
+<script>
+/* Online (green) / Offline (amber) pill, top-right, visible after login (top-level page only) */
+(function(){
+  if(window.top!==window.self) return;
+  var el=document.createElement('span');
+  el.className='netpill netfloat'; el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
+  el.innerHTML='<i></i><span>Online</span>';
+  function upd(){ var on=navigator.onLine!==false; el.classList.toggle('off',!on); el.lastElementChild.textContent=on?'Online':'Offline'; el.setAttribute('aria-label',on?'Online':'Offline'); }
+  function add(){ if(!el.parentNode) document.body.appendChild(el); upd(); }
+  if(document.body) add(); else document.addEventListener('DOMContentLoaded',add);
+  window.addEventListener('online',upd); window.addEventListener('offline',upd);
+  document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') upd(); });
+})();
+</script>
 </body>
 </html>
