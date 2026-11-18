@@ -28265,7 +28265,7 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
 (function(){
   var CLOUD_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxa5VpZAMxjawuCzgxbNsO0fN1eocphNDHuvKA-FuG5CJLEh8jbCVzFnKBHEwVBL0lB/exec';   // paste Apps Script /exec URL here (or enter it on the login screen)
   var LS_SESS='mch_cloud_session', LS_URL='mch_cloud_url', LS_Q='mch_cloud_queue', LS_TS='mch_cloud_ts',
-      LS_USER='mch_cloud_user', LS_PERF='mch_facility_performance', LS_COM='mch_facility_comments', LS_LAST='mch_cloud_last';
+      LS_USER='mch_cloud_user', LS_PERF='mch_facility_performance', LS_COM='mch_facility_comments', LS_LAST='mch_cloud_last', LS_REJ='mch_cloud_rejected';
   var sess = null, busy = false, pulling = false, lastPull = 0;
 
   function J(k, d){ try{ return JSON.parse(localStorage.getItem(k) || ''); }catch(e){ return d; } }
@@ -28301,10 +28301,11 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
     var q = (J(LS_Q, [])||[]).length;
     var who = sess ? (sess.role === 'state' ? 'State' : sess.role === 'assessor' ? 'Assessor ' + sess.slot : sess.district) : '';
     var last = localStorage.getItem(LS_LAST);
-    var txt = msg || (!navigator.onLine ? 'Offline' : q ? q + ' pending' : last ? 'Synced ' + last : 'Ready');
+    var rej = (J(LS_REJ, [])||[]).length;
+    var txt = msg || (!navigator.onLine ? 'Offline' : q ? q + ' pending' : rej ? rej + ' not saved to cloud' : last ? 'Synced ' + last : 'Ready');
     chip.querySelector('.cc-who').textContent = '👤 ' + who;
     var st = chip.querySelector('.cc-st'); st.textContent = '☁ ' + txt;
-    st.className = 'cc-st ' + (cls || (!navigator.onLine || q ? 'warn' : 'ok'));
+    st.className = 'cc-st ' + (cls || (!navigator.onLine || q || rej ? 'warn' : 'ok'));
   }
   function buildChip(){
     chip = document.createElement('div'); chip.id = 'cloudChip';
@@ -28331,20 +28332,37 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
   async function flush(){
     if(!sess || busy || !navigator.onLine) return;
     var q = J(LS_Q, []) || []; if(!q.length) return;
-    busy = true; status('Syncing…', 'busy');
+    busy = true; status('Syncing\u2026', 'busy');
+    var refused = [];
     try{
       while(q.length){
         var batch = q.slice(0, 5);
-        await api('push', { items: batch });
-        q = (J(LS_Q, []) || []).filter(function(x){ return !batch.some(function(b){ return b.key === x.key && (b.rec && b.rec.updatedAt) === (x.rec && x.rec.updatedAt); }); });
+        var r = await api('push', { items: batch });
+        // the server lists what it stored (saved) and what it refused (rejected, with a reason). Only those leave the queue;
+        // anything it did not confirm stays queued and is retried, so a record can never be dropped silently.
+        var savedK = Array.isArray(r.saved) ? r.saved : null, rejK = {};
+        (r.rejected || []).forEach(function(x){ rejK[x.key] = x.reason || 'rejected by the server'; });
+        var done = batch.filter(function(b){ return savedK ? (savedK.indexOf(b.key) >= 0 || rejK[b.key] !== undefined) : true; });
+        if(!done.length) throw new Error('The server did not confirm these records');
+        var rl = J(LS_REJ, []) || [];
+        done.forEach(function(b){
+          rl = rl.filter(function(x){ return x.key !== b.key; });
+          if(rejK[b.key] !== undefined){ var nm = (b.rec && (b.rec.facilityName || b.rec.facility)) || b.key; rl.push({ key: b.key, name: nm, reason: rejK[b.key] }); refused.push({ name: nm, reason: rejK[b.key] }); }
+        });
+        S(LS_REJ, rl);
+        q = (J(LS_Q, []) || []).filter(function(x){ return !done.some(function(b){ return b.key === x.key && (b.rec && b.rec.updatedAt) === (x.rec && x.rec.updatedAt); }); });
         S(LS_Q, q);
       }
       localStorage.setItem(LS_LAST, new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
       status();
     }catch(e){
       if(e.auth) return forceLogout(e.message);
-      status('Sync failed — will retry', 'warn');
+      status('Sync failed \u2014 will retry', 'warn');
     }finally{ busy = false; }
+    if(refused.length){
+      status();
+      alert(refused.length + ' record(s) were NOT saved to the cloud:\n\n' + refused.slice(0, 6).map(function(x){ return '\u2022 ' + x.name + ' \u2014 ' + x.reason; }).join('\n') + (refused.length > 6 ? '\n\u2022 \u2026' : '') + '\n\nThey stay on this device only until fixed. Do not clear the browser data or log out before reporting this.');
+    }
   }
 
   /* ---- pull / merge ---- */
@@ -28353,6 +28371,8 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
     if(!force && Date.now() - lastPull < 20000) return;
     pulling = true; lastPull = Date.now();
     try{
+      var more = true, guard = 0;
+      while(more && guard++ < 60){
       var r = await api('pull', { since: Number(localStorage.getItem(LS_TS)) || 0 });
       var perf = J(LS_PERF, {}) || {}, com = J(LS_COM, {}) || {}, pend = {};
       (J(LS_Q, []) || []).forEach(function(x){ pend[x.key] = 1; });
@@ -28366,7 +28386,10 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
         }
       });
       S(LS_PERF, perf); S(LS_COM, com);
+      var _prev = Number(localStorage.getItem(LS_TS)) || 0;
       localStorage.setItem(LS_TS, String(r.serverTs || 0));
+      more = !!r.more && Number(r.serverTs) > _prev;     // stop if the server did not move forward (no endless loop)
+      }
       localStorage.setItem(LS_LAST, new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
       status();
     }catch(e){
@@ -28531,7 +28554,7 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
         sess = { role: r.role, district: r.district || '', slot: r.role === 'assessor' ? Number(r.slot || sl) : 0, passcode: p }; S(LS_SESS, sess);
         var uid = sess.role + ':' + (sess.role === 'assessor' ? sess.slot : sess.district);
         if(localStorage.getItem(LS_USER) !== uid){        // different user on this device → drop previous cache
-          [LS_PERF, LS_COM, LS_TS, LS_Q, LS_LAST].forEach(function(k){ localStorage.removeItem(k); });
+          [LS_PERF, LS_COM, LS_TS, LS_Q, LS_LAST, LS_REJ].forEach(function(k){ localStorage.removeItem(k); });
           localStorage.setItem(LS_USER, uid);
         }
         start();
@@ -28549,11 +28572,19 @@ window.addEventListener('load', function(){ setTimeout(_geoAutoDetect, 1200); })
     status(); syncNow(false);
   }
   function wipeLocal(){
-    ['nqas_section_saves', LS_PERF, LS_COM, LS_TS, LS_Q, LS_LAST, LS_USER, LS_SESS].forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+    ['nqas_section_saves', LS_PERF, LS_COM, LS_TS, LS_Q, LS_LAST, LS_REJ, LS_USER, LS_SESS].forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
   }
-  function logout(){
+  async function logout(){
     var pend = (J(LS_Q, [])||[]).length;
-    if(!confirm((pend ? pend + ' record(s) not yet synced will be LOST.\n\n' : '') + 'Log out? Local data on this device is cleared (synced data stays in the cloud).')) return;
+    if(pend && navigator.onLine){                       // sync first, so nothing is lost
+      var w = 0; while(busy && w++ < 40) await new Promise(function(r){ setTimeout(r, 250); });
+      status('Syncing before log out\u2026', 'busy'); await flush();
+      pend = (J(LS_Q, [])||[]).length;
+      if(pend){ status(); alert(pend + ' record(s) could not be synced to the cloud, so log out was cancelled to avoid losing them.\n\nCheck the connection, tap the sync button, then try again.'); return; }
+    }
+    var rej = (J(LS_REJ, [])||[]).length;
+    var warn = (pend ? pend + ' record(s) not yet synced (you are offline) will be LOST.\n\n' : '') + (rej ? rej + ' record(s) the cloud refused to store will be LOST.\n\n' : '');
+    if(!confirm(warn + 'Log out? Local data on this device is cleared (synced data stays in the cloud).')) return;
     wipeLocal(); location.reload();
   }
   function forceLogout(msg){ alert('Session ended: ' + msg); wipeLocal(); location.reload(); }
